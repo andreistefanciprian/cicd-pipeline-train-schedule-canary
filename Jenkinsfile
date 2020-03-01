@@ -1,9 +1,5 @@
 pipeline {
-   agent {
-       node {
-           label "centos"
-       }
-   }
+   agent any
     environment {
         DOCKER_IMAGE_NAME = "andreistefanciprian/train-schedule"
     }
