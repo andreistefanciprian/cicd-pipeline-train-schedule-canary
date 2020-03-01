@@ -1,11 +1,14 @@
 pipeline {
-    agent any
+   agent {
+       node {
+           label "centos"
+       }
+   }
     environment {
-        //be sure to replace "willbla" with your own Docker Hub username
-        DOCKER_IMAGE_NAME = "willbla/train-schedule"
+        DOCKER_IMAGE_NAME = "andreistefanciprian/train-schedule"
     }
     stages {
-        stage('Build') {
+        stage('Build and Test') {
             steps {
                 echo 'Running build automation'
                 sh './gradlew build --no-daemon'
@@ -19,13 +22,10 @@ pipeline {
             steps {
                 script {
                     app = docker.build(DOCKER_IMAGE_NAME)
-                    app.inside {
-                        sh 'echo Hello, World!'
-                    }
                 }
             }
         }
-        stage('Push Docker Image') {
+        stage('Push Docker Image to Registry') {
             when {
                 branch 'master'
             }
@@ -38,16 +38,34 @@ pipeline {
                 }
             }
         }
+        stage('Canary Deployment') {
+            when {
+                branch 'master'
+            }
+            environment { 
+                CANARY_REPLICAS = 1
+            }
+            steps {
+                kubernetesDeploy(
+                    kubeconfigId: 'kubeconfig',
+                    configs: 'train-schedule-kube-canary.yml',
+                    enableConfigSubstitution: true
+                )
+            }
+        }
         stage('DeployToProduction') {
             when {
                 branch 'master'
+            }
+            environment { 
+                CANARY_REPLICAS = 0
             }
             steps {
                 input 'Deploy to Production?'
                 milestone(1)
                 kubernetesDeploy(
                     kubeconfigId: 'kubeconfig',
-                    configs: 'train-schedule-kube.yml',
+                    configs: 'train-schedule-kube-canary.yml','train-schedule-kube.yml'
                     enableConfigSubstitution: true
                 )
             }
